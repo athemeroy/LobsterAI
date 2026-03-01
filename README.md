@@ -34,6 +34,7 @@ At its core is **Cowork mode** — it executes tools, manipulates files, and run
 - **Built-in Skills** — Office document generation, web search, Playwright automation, Remotion video generation, and more
 - **Windows Built-in Python Runtime** — Windows packages bundle a ready-to-use Python interpreter runtime; Python skill dependencies can be installed on demand
 - **Scheduled Tasks** — Create recurring tasks via conversation or the GUI — daily news digests, inbox cleanup, periodic report generation, and more
+- **Heartbeat Patrol** — Periodically runs an AI Agent to proactively check for items needing attention; silently skips when nothing is found, pushes IM alerts when action is required
 - **Persistent Memory** — Automatically extracts user preferences and personal facts from conversations, remembers your habits across sessions, and gets smarter the more you use it
 - **Mobile via IM** — Control your Agent remotely from your phone through Telegram, Discord, DingTalk, or Feishu
 - **Permission Gating** — All tool invocations require explicit user approval before execution
@@ -248,6 +249,45 @@ LobsterAI supports scheduled tasks that let the Agent automatically execute recu
 | Work Reminders | Generate to-do lists or meeting notes on a schedule |
 
 Scheduled tasks are powered by Cron expressions, supporting minute, hourly, daily, weekly, and monthly intervals. When a task fires, it automatically starts a Cowork session. Results can be viewed on the desktop or pushed to your phone via IM.
+
+## Heartbeat — Proactive Agent Patrol
+
+LobsterAI includes a **Heartbeat** mechanism that periodically wakes up an AI Agent to proactively check whether anything needs your attention — without any user prompt.
+
+### How It Works
+
+1. On each heartbeat tick (default: every 30 minutes), LobsterAI starts a Cowork session with a patrol prompt
+2. The Agent reads `HEARTBEAT.md` from your working directory and follows the checklist inside
+3. If nothing needs attention, the Agent replies `HEARTBEAT_OK` — the response is silently discarded (no notification)
+4. If something actionable is found, the result is pushed to your configured IM channels
+
+### HEARTBEAT.md
+
+Place a `HEARTBEAT.md` file in your working directory to tell the Agent what to inspect each cycle. Example:
+
+```markdown
+# Heartbeat Tasks
+
+- Check if any new GitHub issues were filed in the past 30 minutes
+- Check my inbox for urgent emails (subject contains "urgent" or "ASAP")
+- If the server CPU load average > 80% for the past 5 minutes, alert me
+```
+
+The Agent reads this file fresh on every run — you can edit it at any time to update your patrol list.
+
+### Configuration (Settings → Heartbeat)
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| Enable | Turn heartbeat on or off | Off |
+| Interval | How often to run: 15 min / 30 min / 1 h / 2 h | 30 min |
+| Active Hours | Only run during a specified time window (e.g. 08:00–22:00) | All day |
+| Notify Channels | Which IM platforms to push results to | None |
+| Check Prompt | Custom prompt sent to the Agent on each tick | Built-in default |
+
+### Duplicate Suppression
+
+If the Agent returns the same result within 24 hours, the duplicate notification is silently dropped — preventing alert fatigue from repeated findings.
 
 ## IM Integration — Mobile Remote Control
 
