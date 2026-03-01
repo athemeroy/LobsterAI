@@ -714,6 +714,7 @@ const getHeartbeatRunner = () => {
           notifyPlatforms: raw.notifyPlatforms ? JSON.parse(raw.notifyPlatforms) : defaults.notifyPlatforms,
           ackMaxChars: raw.ackMaxChars ? parseInt(raw.ackMaxChars, 10) : defaults.ackMaxChars,
           workingDirectory: raw.workingDirectory || undefined,
+          sessionId: raw.sessionId || undefined,
         };
       },
       saveConfig: (config: HeartbeatConfig) => {
@@ -725,6 +726,7 @@ const getHeartbeatRunner = () => {
           notifyPlatforms: JSON.stringify(config.notifyPlatforms),
           ackMaxChars: String(config.ackMaxChars),
           workingDirectory: config.workingDirectory || '',
+          sessionId: config.sessionId || '',
         });
       },
       getSkillsPrompt: async () => {
@@ -1642,6 +1644,7 @@ if (!gotTheLock) {
         notifyPlatforms: raw.notifyPlatforms ? JSON.parse(raw.notifyPlatforms) : defaults.notifyPlatforms,
         ackMaxChars: raw.ackMaxChars ? parseInt(raw.ackMaxChars, 10) : defaults.ackMaxChars,
         workingDirectory: raw.workingDirectory || undefined,
+        sessionId: raw.sessionId || undefined,
       };
       return { success: true, config: fullConfig };
     } catch (error) {

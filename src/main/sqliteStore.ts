@@ -241,6 +241,11 @@ export class SqliteStore {
         this.save();
       }
 
+      if (!columns.includes('is_heartbeat')) {
+        this.db.run('ALTER TABLE cowork_sessions ADD COLUMN is_heartbeat INTEGER NOT NULL DEFAULT 0;');
+        this.save();
+      }
+
       // Migration: Add sequence column to cowork_messages
       const msgColsResult = this.db.exec("PRAGMA table_info(cowork_messages);");
       const msgColumns = msgColsResult[0]?.values.map((row) => row[1]) || [];

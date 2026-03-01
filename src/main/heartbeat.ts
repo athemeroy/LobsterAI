@@ -24,6 +24,7 @@ export interface HeartbeatConfig {
   notifyPlatforms: NotifyPlatform[];
   ackMaxChars: number;
   workingDirectory?: string;
+  sessionId?: string;
 }
 
 export interface HeartbeatStatus {
@@ -269,39 +270,58 @@ export class HeartbeatRunner {
       .join('\n\n');
 
     const executionMode = coworkConfig.executionMode || 'auto';
+    const prompt = config.prompt || DEFAULT_PROMPT;
 
-    // Create a heartbeat session
-    const session = this.deps.coworkStore.createSession(
-      '[Heartbeat] 巡查',
-      cwd,
-      systemPrompt,
-      executionMode,
-      []
-    );
+    // Reuse persistent session or create a new one
+    let sessionId = config.sessionId;
+    let existingSession = sessionId ? this.deps.coworkStore.getSession(sessionId) : null;
 
-    // Update session to running
-    this.deps.coworkStore.updateSession(session.id, { status: 'running' });
+    if (!existingSession) {
+      // Create a new persistent heartbeat session
+      const session = this.deps.coworkStore.createSession(
+        '[Heartbeat] 巡查',
+        cwd,
+        systemPrompt,
+        executionMode,
+        [],
+        true
+      );
+      sessionId = session.id;
+      existingSession = session;
 
-    // Add initial user message
-    this.deps.coworkStore.addMessage(session.id, {
+      // Persist session ID for future ticks
+      this.deps.saveConfig({ ...config, sessionId });
+    } else {
+      // Update cwd in case working directory changed
+      this.deps.coworkStore.updateSession(sessionId, { cwd });
+    }
+
+    // Record message count before this tick to extract only new replies
+    const messageCountBefore = existingSession.messages.length;
+
+    // Update session status and add user message
+    this.deps.coworkStore.updateSession(sessionId, { status: 'running' });
+    this.deps.coworkStore.addMessage(sessionId, {
       type: 'user',
-      content: config.prompt || DEFAULT_PROMPT,
+      content: prompt,
     });
 
-    // Run the session
+    // Run the session (resumes Claude conversation via stored claudeSessionId)
     const runner = this.deps.getCoworkRunner();
-    await runner.startSession(session.id, config.prompt || DEFAULT_PROMPT, {
+    await runner.startSession(sessionId, prompt, {
       skipInitialUserMessage: true,
       confirmationMode: 'text',
+      systemPrompt,
     });
 
-    // Extract assistant reply
-    const completedSession = this.deps.coworkStore.getSession(session.id);
+    // Extract only assistant replies from THIS tick
+    const completedSession = this.deps.coworkStore.getSession(sessionId);
     if (!completedSession) {
       throw new Error('Session not found after completion');
     }
 
-    const assistantMessages = completedSession.messages.filter(
+    const newMessages = completedSession.messages.slice(messageCountBefore);
+    const assistantMessages = newMessages.filter(
       (msg) => msg.type === 'assistant' && msg.content && !msg.metadata?.isThinking
     );
     return assistantMessages.map((m) => m.content).join('\n\n');

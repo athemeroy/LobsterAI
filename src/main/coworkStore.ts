@@ -510,15 +510,16 @@ export class CoworkStore {
     cwd: string,
     systemPrompt: string = '',
     executionMode: CoworkExecutionMode = 'local',
-    activeSkillIds: string[] = []
+    activeSkillIds: string[] = [],
+    isHeartbeat: boolean = false
   ): CoworkSession {
     const id = uuidv4();
     const now = Date.now();
 
     this.db.run(`
-      INSERT INTO cowork_sessions (id, title, claude_session_id, status, cwd, system_prompt, execution_mode, active_skill_ids, pinned, created_at, updated_at)
-      VALUES (?, ?, NULL, 'idle', ?, ?, ?, ?, 0, ?, ?)
-    `, [id, title, cwd, systemPrompt, executionMode, JSON.stringify(activeSkillIds), now, now]);
+      INSERT INTO cowork_sessions (id, title, claude_session_id, status, cwd, system_prompt, execution_mode, active_skill_ids, pinned, is_heartbeat, created_at, updated_at)
+      VALUES (?, ?, NULL, 'idle', ?, ?, ?, ?, 0, ?, ?, ?)
+    `, [id, title, cwd, systemPrompt, executionMode, JSON.stringify(activeSkillIds), isHeartbeat ? 1 : 0, now, now]);
 
     this.saveDb();
 
