@@ -1682,6 +1682,41 @@ if (!gotTheLock) {
     }
   });
 
+  ipcMain.handle('heartbeat:checkFile', async () => {
+    try {
+      const workingDir = getCoworkStore().getConfig().workingDirectory;
+      if (!workingDir) return { success: true, exists: false, filePath: null };
+      const filePath = path.join(workingDir, 'HEARTBEAT.md');
+      const exists = fs.existsSync(filePath);
+      return { success: true, exists, filePath };
+    } catch (error) {
+      return { success: false, exists: false, filePath: null };
+    }
+  });
+
+  ipcMain.handle('heartbeat:openOrCreateFile', async () => {
+    try {
+      const workingDir = getCoworkStore().getConfig().workingDirectory;
+      if (!workingDir) return { success: false, error: 'Working directory not set' };
+      const filePath = path.join(workingDir, 'HEARTBEAT.md');
+      if (!fs.existsSync(filePath)) {
+        const template = [
+          '# Heartbeat Tasks',
+          '',
+          '- Check if any new GitHub issues were filed in the past 30 minutes',
+          '- Check my inbox for urgent emails (subject contains "urgent" or "ASAP")',
+          '- If the server CPU load average > 80% for the past 5 minutes, alert me',
+          '',
+        ].join('\n');
+        fs.writeFileSync(filePath, template, 'utf-8');
+      }
+      await shell.openPath(filePath);
+      return { success: true, filePath };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Failed to open file' };
+    }
+  });
+
   // ==================== Permissions IPC Handlers ====================
 
   ipcMain.handle('permissions:checkCalendar', async () => {

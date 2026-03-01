@@ -348,6 +348,8 @@ interface IElectronAPI {
     getStatus: () => Promise<{ success: boolean; status?: HeartbeatStatus; error?: string }>;
     runNow: () => Promise<{ success: boolean; result?: HeartbeatRunResult; error?: string }>;
     getHistory: () => Promise<{ success: boolean; history?: HeartbeatHistoryEntry[]; error?: string }>;
+    checkFile: () => Promise<{ success: boolean; exists: boolean; filePath: string | null }>;
+    openOrCreateFile: () => Promise<{ success: boolean; filePath?: string; error?: string }>;
     onStatusChange: (callback: (status: HeartbeatStatus) => void) => () => void;
   };
   permissions: {

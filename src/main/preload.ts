@@ -313,6 +313,8 @@ contextBridge.exposeInMainWorld('electron', {
     getStatus: () => ipcRenderer.invoke('heartbeat:status'),
     runNow: () => ipcRenderer.invoke('heartbeat:runNow'),
     getHistory: () => ipcRenderer.invoke('heartbeat:history'),
+    checkFile: () => ipcRenderer.invoke('heartbeat:checkFile'),
+    openOrCreateFile: () => ipcRenderer.invoke('heartbeat:openOrCreateFile'),
     onStatusChange: (callback: (status: any) => void) => {
       const handler = (_event: any, status: any) => callback(status);
       ipcRenderer.on('heartbeat:statusChange', handler);

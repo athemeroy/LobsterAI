@@ -48,17 +48,22 @@ const HeartbeatSettings: React.FC = () => {
   const [history, setHistory] = useState<LocalHeartbeatHistoryEntry[]>([]);
   const [runningNow, setRunningNow] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [fileExists, setFileExists] = useState<boolean | null>(null);
+  const [fileOpening, setFileOpening] = useState(false);
+  const [fileNoWorkDir, setFileNoWorkDir] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
-      const [configRes, statusRes, historyRes] = await Promise.all([
+      const [configRes, statusRes, historyRes, fileRes] = await Promise.all([
         window.electron.heartbeat.getConfig(),
         window.electron.heartbeat.getStatus(),
         window.electron.heartbeat.getHistory(),
+        window.electron.heartbeat.checkFile(),
       ]);
       if (configRes.success && configRes.config) setConfig(configRes.config);
       if (statusRes.success && statusRes.status) setStatus(statusRes.status);
       if (historyRes.success && historyRes.history) setHistory(historyRes.history);
+      if (fileRes.success) setFileExists(fileRes.exists);
     } catch (err) {
       console.error('Failed to load heartbeat data:', err);
     }
@@ -88,6 +93,23 @@ const HeartbeatSettings: React.FC = () => {
       console.error('Failed to update heartbeat config:', err);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleOpenOrCreateFile = async () => {
+    setFileOpening(true);
+    setFileNoWorkDir(false);
+    try {
+      const res = await window.electron.heartbeat.openOrCreateFile();
+      if (!res.success && res.error === 'Working directory not set') {
+        setFileNoWorkDir(true);
+      } else if (res.success) {
+        setFileExists(true);
+      }
+    } catch (err) {
+      console.error('Failed to open/create HEARTBEAT.md:', err);
+    } finally {
+      setFileOpening(false);
     }
   };
 
@@ -143,6 +165,39 @@ const HeartbeatSettings: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* HEARTBEAT.md file section */}
+      <div className="p-3 rounded-lg border dark:border-claude-darkBorder border-claude-border space-y-2">
+        <div className="flex items-center justify-between">
+          <h4 className="text-sm font-medium dark:text-claude-darkText text-claude-text">
+            {i18nService.t('heartbeatFileSection')}
+          </h4>
+          {fileExists !== null && (
+            <span className={`text-xs font-medium ${fileExists ? 'text-green-500' : 'dark:text-claude-darkSubtext text-claude-subtext'}`}>
+              {fileExists ? i18nService.t('heartbeatFileExists') : i18nService.t('heartbeatFileNotFound')}
+            </span>
+          )}
+        </div>
+        <p className="text-xs dark:text-claude-darkSubtext text-claude-subtext">
+          {i18nService.t('heartbeatFileHint')}
+        </p>
+        <div className="rounded bg-gray-100 dark:bg-claude-darkBg/70 px-3 py-2 text-xs font-mono dark:text-claude-darkSubtext text-claude-subtext leading-relaxed">
+          {'# Heartbeat Tasks'}<br />
+          {'- Check inbox for urgent emails'}<br />
+          {'- Check GitHub issues filed in the past 30 min'}<br />
+          {'- If CPU > 80%, alert me'}
+        </div>
+        {fileNoWorkDir && (
+          <p className="text-xs text-yellow-500">{i18nService.t('heartbeatFileNoWorkDir')}</p>
+        )}
+        <button
+          onClick={handleOpenOrCreateFile}
+          disabled={fileOpening}
+          className="w-full px-3 py-1.5 text-xs rounded-md border dark:border-claude-darkBorder border-claude-border dark:text-claude-darkText text-claude-text hover:border-claude-primary hover:text-claude-primary transition-colors disabled:opacity-50"
+        >
+          {fileExists ? i18nService.t('heartbeatFileOpen') : i18nService.t('heartbeatFileCreate')}
+        </button>
+      </div>
+
       {/* Enable toggle */}
       <div className="flex items-center justify-between">
         <div>
