@@ -342,6 +342,14 @@ interface IElectronAPI {
     onStatusUpdate: (callback: (data: any) => void) => () => void;
     onRunUpdate: (callback: (data: any) => void) => () => void;
   };
+  heartbeat: {
+    getConfig: () => Promise<{ success: boolean; config?: HeartbeatConfig; error?: string }>;
+    setConfig: (config: Partial<HeartbeatConfig>) => Promise<{ success: boolean; error?: string }>;
+    getStatus: () => Promise<{ success: boolean; status?: HeartbeatStatus; error?: string }>;
+    runNow: () => Promise<{ success: boolean; result?: HeartbeatRunResult; error?: string }>;
+    getHistory: () => Promise<{ success: boolean; history?: HeartbeatHistoryEntry[]; error?: string }>;
+    onStatusChange: (callback: (status: HeartbeatStatus) => void) => () => void;
+  };
   permissions: {
     checkCalendar: () => Promise<{ success: boolean; status?: string; error?: string; autoRequested?: boolean }>;
     requestCalendar: () => Promise<{ success: boolean; granted?: boolean; status?: string; error?: string }>;
@@ -349,6 +357,37 @@ interface IElectronAPI {
   networkStatus: {
     send: (status: 'online' | 'offline') => void;
   };
+}
+
+// Heartbeat types
+interface HeartbeatConfig {
+  enabled: boolean;
+  intervalMs: number;
+  prompt: string;
+  activeHours?: { start: string; end: string; timezone?: string } | null;
+  notifyPlatforms: ('dingtalk' | 'feishu' | 'telegram' | 'discord' | 'nim')[];
+  ackMaxChars: number;
+}
+
+interface HeartbeatStatus {
+  running: boolean;
+  lastRunAt: number | null;
+  lastResult: 'ok' | 'notified' | 'error' | 'skipped' | null;
+  lastError: string | null;
+  nextRunAt: number | null;
+}
+
+interface HeartbeatRunResult {
+  result: 'ok' | 'notified' | 'error' | 'skipped';
+  message?: string;
+  error?: string;
+}
+
+interface HeartbeatHistoryEntry {
+  timestamp: number;
+  result: 'ok' | 'notified' | 'error' | 'skipped';
+  message?: string;
+  error?: string;
 }
 
 // IM Gateway types

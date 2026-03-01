@@ -307,6 +307,18 @@ contextBridge.exposeInMainWorld('electron', {
       return () => ipcRenderer.removeListener('scheduledTask:runUpdate', handler);
     },
   },
+  heartbeat: {
+    getConfig: () => ipcRenderer.invoke('heartbeat:config:get'),
+    setConfig: (config: any) => ipcRenderer.invoke('heartbeat:config:set', config),
+    getStatus: () => ipcRenderer.invoke('heartbeat:status'),
+    runNow: () => ipcRenderer.invoke('heartbeat:runNow'),
+    getHistory: () => ipcRenderer.invoke('heartbeat:history'),
+    onStatusChange: (callback: (status: any) => void) => {
+      const handler = (_event: any, status: any) => callback(status);
+      ipcRenderer.on('heartbeat:statusChange', handler);
+      return () => ipcRenderer.removeListener('heartbeat:statusChange', handler);
+    },
+  },
   networkStatus: {
     send: (status: 'online' | 'offline') => ipcRenderer.send('network:status-change', status),
   },

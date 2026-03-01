@@ -20,6 +20,7 @@ import { createTray, destroyTray, updateTrayMenu } from './trayManager';
 import { isAutoLaunched, getAutoLaunchEnabled, setAutoLaunchEnabled } from './autoLaunchManager';
 import { ScheduledTaskStore } from './scheduledTaskStore';
 import { Scheduler } from './libs/scheduler';
+import { HeartbeatRunner, getDefaultHeartbeatConfig, type HeartbeatConfig } from './heartbeat';
 import { downloadUpdate, installUpdate, cancelActiveDownload } from './libs/appUpdateInstaller';
 import { initLogger, getLogFilePath } from './logger';
 import { ensurePythonRuntimeReady } from './libs/pythonRuntime';
@@ -474,6 +475,7 @@ let skillManager: SkillManager | null = null;
 let imGatewayManager: IMGatewayManager | null = null;
 let scheduledTaskStore: ScheduledTaskStore | null = null;
 let scheduler: Scheduler | null = null;
+let heartbeatRunner: HeartbeatRunner | null = null;
 let storeInitPromise: Promise<SqliteStore> | null = null;
 
 const initStore = async (): Promise<SqliteStore> => {
@@ -690,6 +692,45 @@ const getScheduler = () => {
     });
   }
   return scheduler;
+};
+
+const getHeartbeatRunner = () => {
+  if (!heartbeatRunner) {
+    const sqliteStore = getStore();
+    heartbeatRunner = new HeartbeatRunner({
+      coworkStore: getCoworkStore(),
+      getCoworkRunner,
+      getIMGatewayManager: () => {
+        try { return getIMGatewayManager(); } catch { return null; }
+      },
+      getConfig: () => {
+        const raw = sqliteStore.getHeartbeatConfig();
+        const defaults = getDefaultHeartbeatConfig();
+        return {
+          enabled: raw.enabled === 'true' ? true : (raw.enabled === 'false' ? false : defaults.enabled),
+          intervalMs: raw.intervalMs ? parseInt(raw.intervalMs, 10) : defaults.intervalMs,
+          prompt: raw.prompt ?? defaults.prompt,
+          activeHours: raw.activeHours ? JSON.parse(raw.activeHours) : defaults.activeHours,
+          notifyPlatforms: raw.notifyPlatforms ? JSON.parse(raw.notifyPlatforms) : defaults.notifyPlatforms,
+          ackMaxChars: raw.ackMaxChars ? parseInt(raw.ackMaxChars, 10) : defaults.ackMaxChars,
+        };
+      },
+      saveConfig: (config: HeartbeatConfig) => {
+        sqliteStore.setHeartbeatConfig({
+          enabled: String(config.enabled),
+          intervalMs: String(config.intervalMs),
+          prompt: config.prompt,
+          activeHours: JSON.stringify(config.activeHours),
+          notifyPlatforms: JSON.stringify(config.notifyPlatforms),
+          ackMaxChars: String(config.ackMaxChars),
+        });
+      },
+      getSkillsPrompt: async () => {
+        return getSkillManager().buildAutoRoutingPrompt();
+      },
+    });
+  }
+  return heartbeatRunner;
 };
 
 // 获取正确的预加载脚本路径
@@ -1583,6 +1624,64 @@ if (!gotTheLock) {
     }
   });
 
+  // ==================== Heartbeat IPC Handlers ====================
+
+  ipcMain.handle('heartbeat:config:get', async () => {
+    try {
+      getHeartbeatRunner(); // ensure runner is initialized
+      const sqliteStore = getStore();
+      const raw = sqliteStore.getHeartbeatConfig();
+      const defaults = getDefaultHeartbeatConfig();
+      const fullConfig = {
+        enabled: raw.enabled === 'true' ? true : (raw.enabled === 'false' ? false : defaults.enabled),
+        intervalMs: raw.intervalMs ? parseInt(raw.intervalMs, 10) : defaults.intervalMs,
+        prompt: raw.prompt ?? defaults.prompt,
+        activeHours: raw.activeHours ? JSON.parse(raw.activeHours) : defaults.activeHours,
+        notifyPlatforms: raw.notifyPlatforms ? JSON.parse(raw.notifyPlatforms) : defaults.notifyPlatforms,
+        ackMaxChars: raw.ackMaxChars ? parseInt(raw.ackMaxChars, 10) : defaults.ackMaxChars,
+      };
+      return { success: true, config: fullConfig };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Failed to get heartbeat config' };
+    }
+  });
+
+  ipcMain.handle('heartbeat:config:set', async (_event, config: Partial<HeartbeatConfig>) => {
+    try {
+      getHeartbeatRunner().updateConfig(config);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Failed to set heartbeat config' };
+    }
+  });
+
+  ipcMain.handle('heartbeat:status', async () => {
+    try {
+      const status = getHeartbeatRunner().getStatus();
+      return { success: true, status };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Failed to get heartbeat status' };
+    }
+  });
+
+  ipcMain.handle('heartbeat:runNow', async () => {
+    try {
+      const result = await getHeartbeatRunner().runOnce();
+      return { success: true, result };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Failed to run heartbeat' };
+    }
+  });
+
+  ipcMain.handle('heartbeat:history', async () => {
+    try {
+      const history = getHeartbeatRunner().getHistory();
+      return { success: true, history };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Failed to get heartbeat history' };
+    }
+  });
+
   // ==================== Permissions IPC Handlers ====================
 
   ipcMain.handle('permissions:checkCalendar', async () => {
@@ -2211,6 +2310,9 @@ if (!gotTheLock) {
 
       // Start the scheduler
       getScheduler().start();
+
+      // Start heartbeat runner
+      getHeartbeatRunner().start();
     });
   };
 
@@ -2246,6 +2348,11 @@ if (!gotTheLock) {
     // Stop the scheduler
     if (scheduler) {
       scheduler.stop();
+    }
+
+    // Stop heartbeat runner
+    if (heartbeatRunner) {
+      heartbeatRunner.stop();
     }
   };
 

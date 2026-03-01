@@ -212,6 +212,14 @@ export class SqliteStore {
         ON scheduled_task_runs(task_id, started_at DESC);
     `);
 
+    // Heartbeat config table
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS heartbeat_config (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+    `);
+
     // Migrations - safely add columns if they don't exist
     try {
       // Check if execution_mode column exists
@@ -357,6 +365,30 @@ export class SqliteStore {
   // Expose save method for external use (e.g., CoworkStore)
   getSaveFunction(): () => void {
     return () => this.save();
+  }
+
+  // --- Heartbeat config helpers ---
+
+  getHeartbeatConfig(): Record<string, string> {
+    const result = this.db.exec('SELECT key, value FROM heartbeat_config');
+    const map: Record<string, string> = {};
+    if (result[0]) {
+      for (const row of result[0].values) {
+        map[row[0] as string] = row[1] as string;
+      }
+    }
+    return map;
+  }
+
+  setHeartbeatConfig(entries: Record<string, string>): void {
+    for (const [key, value] of Object.entries(entries)) {
+      this.db.run(`
+        INSERT INTO heartbeat_config (key, value)
+        VALUES (?, ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+      `, [key, value]);
+    }
+    this.save();
   }
 
   private tryReadLegacyMemoryText(): string {
