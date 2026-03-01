@@ -713,6 +713,7 @@ const getHeartbeatRunner = () => {
           activeHours: raw.activeHours ? JSON.parse(raw.activeHours) : defaults.activeHours,
           notifyPlatforms: raw.notifyPlatforms ? JSON.parse(raw.notifyPlatforms) : defaults.notifyPlatforms,
           ackMaxChars: raw.ackMaxChars ? parseInt(raw.ackMaxChars, 10) : defaults.ackMaxChars,
+          workingDirectory: raw.workingDirectory || undefined,
         };
       },
       saveConfig: (config: HeartbeatConfig) => {
@@ -723,6 +724,7 @@ const getHeartbeatRunner = () => {
           activeHours: JSON.stringify(config.activeHours),
           notifyPlatforms: JSON.stringify(config.notifyPlatforms),
           ackMaxChars: String(config.ackMaxChars),
+          workingDirectory: config.workingDirectory || '',
         });
       },
       getSkillsPrompt: async () => {
@@ -1639,6 +1641,7 @@ if (!gotTheLock) {
         activeHours: raw.activeHours ? JSON.parse(raw.activeHours) : defaults.activeHours,
         notifyPlatforms: raw.notifyPlatforms ? JSON.parse(raw.notifyPlatforms) : defaults.notifyPlatforms,
         ackMaxChars: raw.ackMaxChars ? parseInt(raw.ackMaxChars, 10) : defaults.ackMaxChars,
+        workingDirectory: raw.workingDirectory || undefined,
       };
       return { success: true, config: fullConfig };
     } catch (error) {
@@ -1684,7 +1687,8 @@ if (!gotTheLock) {
 
   ipcMain.handle('heartbeat:checkFile', async () => {
     try {
-      const workingDir = getCoworkStore().getConfig().workingDirectory;
+      const hbConfig = getStore().getHeartbeatConfig();
+      const workingDir = hbConfig.workingDirectory || getCoworkStore().getConfig().workingDirectory;
       if (!workingDir) return { success: true, exists: false, filePath: null };
       const filePath = path.join(workingDir, 'HEARTBEAT.md');
       const exists = fs.existsSync(filePath);
@@ -1696,7 +1700,8 @@ if (!gotTheLock) {
 
   ipcMain.handle('heartbeat:openOrCreateFile', async () => {
     try {
-      const workingDir = getCoworkStore().getConfig().workingDirectory;
+      const hbConfig = getStore().getHeartbeatConfig();
+      const workingDir = hbConfig.workingDirectory || getCoworkStore().getConfig().workingDirectory;
       if (!workingDir) return { success: false, error: 'Working directory not set' };
       const filePath = path.join(workingDir, 'HEARTBEAT.md');
       if (!fs.existsSync(filePath)) {

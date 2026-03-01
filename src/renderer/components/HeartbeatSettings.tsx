@@ -10,6 +10,7 @@ interface LocalHeartbeatConfig {
   activeHours?: { start: string; end: string; timezone?: string } | null;
   notifyPlatforms: HeartbeatPlatform[];
   ackMaxChars: number;
+  workingDirectory?: string;
 }
 
 interface LocalHeartbeatStatus {
@@ -224,6 +225,44 @@ const HeartbeatSettings: React.FC = () => {
             }`}
           />
         </button>
+      </div>
+
+      {/* Working directory */}
+      <div>
+        <h4 className="text-sm font-medium dark:text-claude-darkText text-claude-text mb-1">
+          {i18nService.t('heartbeatWorkingDir')}
+        </h4>
+        <p className="text-xs dark:text-claude-darkSubtext text-claude-subtext mb-2">
+          {i18nService.t('heartbeatWorkingDirHint')}
+        </p>
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={config.workingDirectory || ''}
+            readOnly
+            placeholder={i18nService.t('heartbeatWorkingDirPlaceholder')}
+            className="flex-1 text-sm rounded-md border dark:border-claude-darkBorder border-claude-border dark:bg-claude-darkBg bg-white px-2 py-1 dark:text-claude-darkSubtext text-claude-subtext focus:outline-none truncate"
+          />
+          <button
+            onClick={async () => {
+              const res = await window.electron.dialog.selectDirectory();
+              if (res.success && res.path) updateConfig({ workingDirectory: res.path });
+            }}
+            disabled={saving}
+            className="shrink-0 text-xs px-2 py-1 rounded-md border dark:border-claude-darkBorder border-claude-border dark:text-claude-darkSubtext text-claude-subtext hover:border-claude-primary hover:text-claude-primary transition-colors disabled:opacity-50"
+          >
+            {i18nService.t('heartbeatWorkingDirBrowse')}
+          </button>
+          {config.workingDirectory && (
+            <button
+              onClick={() => updateConfig({ workingDirectory: undefined })}
+              disabled={saving}
+              className="shrink-0 text-xs text-red-500 hover:text-red-600 disabled:opacity-50"
+            >
+              &times;
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Interval */}

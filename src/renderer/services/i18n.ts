@@ -687,13 +687,17 @@ const translations: Record<LanguageType, Record<string, string>> = {
     heartbeatRunning: '运行中...',
     heartbeatHistory: '运行历史',
     heartbeatNoHistory: '暂无运行记录',
+    heartbeatWorkingDir: '心跳工作目录',
+    heartbeatWorkingDirHint: '心跳巡查专用工作目录，HEARTBEAT.md 放在这里。未设置则使用 Cowork 工作目录。',
+    heartbeatWorkingDirPlaceholder: '（使用 Cowork 工作目录）',
+    heartbeatWorkingDirBrowse: '选择目录',
     heartbeatFileSection: 'HEARTBEAT.md 巡查清单',
     heartbeatFileHint: 'Agent 每次巡查时读取工作目录下的 HEARTBEAT.md，按清单执行检查。此文件由你手动维护，Agent 不会自动创建它。',
     heartbeatFileExists: '文件已存在',
     heartbeatFileNotFound: '文件不存在',
     heartbeatFileOpen: '打开 HEARTBEAT.md',
     heartbeatFileCreate: '创建 HEARTBEAT.md 模板',
-    heartbeatFileNoWorkDir: '请先在 Cowork 设置中配置工作目录',
+    heartbeatFileNoWorkDir: '请先设置心跳工作目录或 Cowork 工作目录',
   },
   en: {
     // Common
@@ -1377,13 +1381,17 @@ const translations: Record<LanguageType, Record<string, string>> = {
     heartbeatRunning: 'Running...',
     heartbeatHistory: 'Run history',
     heartbeatNoHistory: 'No run history yet',
+    heartbeatWorkingDir: 'Heartbeat working directory',
+    heartbeatWorkingDirHint: 'Dedicated working directory for heartbeat runs. Place HEARTBEAT.md here. Falls back to the Cowork working directory if not set.',
+    heartbeatWorkingDirPlaceholder: '(uses Cowork working directory)',
+    heartbeatWorkingDirBrowse: 'Browse',
     heartbeatFileSection: 'HEARTBEAT.md Checklist',
-    heartbeatFileHint: 'On each heartbeat run, the Agent reads HEARTBEAT.md from your working directory and follows the checklist. You maintain this file manually — the Agent will not create it for you.',
+    heartbeatFileHint: 'On each heartbeat run, the Agent reads HEARTBEAT.md from the working directory and follows the checklist. You maintain this file manually — the Agent will not create it for you.',
     heartbeatFileExists: 'File exists',
     heartbeatFileNotFound: 'File not found',
     heartbeatFileOpen: 'Open HEARTBEAT.md',
     heartbeatFileCreate: 'Create HEARTBEAT.md template',
-    heartbeatFileNoWorkDir: 'Set a working directory in Cowork settings first',
+    heartbeatFileNoWorkDir: 'Set a heartbeat or Cowork working directory first',
   }
 };
 

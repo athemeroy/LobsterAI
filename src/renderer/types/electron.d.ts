@@ -369,6 +369,7 @@ interface HeartbeatConfig {
   activeHours?: { start: string; end: string; timezone?: string } | null;
   notifyPlatforms: ('dingtalk' | 'feishu' | 'telegram' | 'discord' | 'nim')[];
   ackMaxChars: number;
+  workingDirectory?: string;
 }
 
 interface HeartbeatStatus {

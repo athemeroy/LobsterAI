@@ -23,6 +23,7 @@ export interface HeartbeatConfig {
   activeHours?: { start: string; end: string; timezone?: string } | null;
   notifyPlatforms: NotifyPlatform[];
   ackMaxChars: number;
+  workingDirectory?: string;
 }
 
 export interface HeartbeatStatus {
@@ -251,7 +252,7 @@ export class HeartbeatRunner {
 
   private async runCoworkSession(config: HeartbeatConfig): Promise<string> {
     const coworkConfig = this.deps.coworkStore.getConfig();
-    const cwd = coworkConfig.workingDirectory;
+    const cwd = config.workingDirectory || coworkConfig.workingDirectory;
     const baseSystemPrompt = coworkConfig.systemPrompt || '';
 
     let skillsPrompt: string | null = null;
