@@ -10,6 +10,7 @@ import {
 } from './coworkFormatTransform';
 import type { ScheduledTaskStore, ScheduledTaskInput } from '../scheduledTaskStore';
 import type { Scheduler } from './scheduler';
+import type { HeartbeatRunner, HeartbeatConfig } from '../heartbeat';
 
 export type OpenAICompatUpstreamConfig = {
   baseURL: string;
@@ -89,6 +90,20 @@ let scheduledTaskDeps: ScheduledTaskDeps | null = null;
 
 export function setScheduledTaskDeps(deps: ScheduledTaskDeps): void {
   scheduledTaskDeps = deps;
+}
+
+// --- Heartbeat API dependencies ---
+interface HeartbeatDeps {
+  getHeartbeatRunner: () => HeartbeatRunner;
+  getConfig: () => HeartbeatConfig;
+  saveConfig: (config: HeartbeatConfig) => void;
+  readHeartbeatFile: () => string | null;
+  writeHeartbeatFile: (content: string) => void;
+}
+let heartbeatDeps: HeartbeatDeps | null = null;
+
+export function setHeartbeatDeps(deps: HeartbeatDeps): void {
+  heartbeatDeps = deps;
 }
 
 function toOptionalObject(value: unknown): Record<string, unknown> | null {
@@ -2461,6 +2476,154 @@ async function handleToggleScheduledTask(
   }
 }
 
+// --- Heartbeat API handlers ---
+
+async function handleGetHeartbeatConfig(
+  _req: http.IncomingMessage,
+  res: http.ServerResponse
+): Promise<void> {
+  if (!heartbeatDeps) {
+    writeJSON(res, 503, { success: false, error: 'Heartbeat service not available' } as any);
+    return;
+  }
+  try {
+    const config = heartbeatDeps.getConfig();
+    const status = heartbeatDeps.getHeartbeatRunner().getStatus();
+    writeJSON(res, 200, { success: true, config, status } as any);
+  } catch (err: any) {
+    console.error('[CoworkProxy] Failed to get heartbeat config:', err);
+    writeJSON(res, 500, { success: false, error: err.message } as any);
+  }
+}
+
+async function handleSetHeartbeatConfig(
+  req: http.IncomingMessage,
+  res: http.ServerResponse
+): Promise<void> {
+  if (!heartbeatDeps) {
+    writeJSON(res, 503, { success: false, error: 'Heartbeat service not available' } as any);
+    return;
+  }
+
+  let body: string;
+  try {
+    body = await readRequestBody(req);
+  } catch {
+    writeJSON(res, 400, { success: false, error: 'Invalid request body' } as any);
+    return;
+  }
+
+  let input: any;
+  try {
+    input = JSON.parse(body);
+  } catch {
+    writeJSON(res, 400, { success: false, error: 'Invalid JSON' } as any);
+    return;
+  }
+
+  try {
+    heartbeatDeps.getHeartbeatRunner().updateConfig(input);
+    const config = heartbeatDeps.getConfig();
+    const status = heartbeatDeps.getHeartbeatRunner().getStatus();
+    console.log('[CoworkProxy] Heartbeat config updated via API');
+    writeJSON(res, 200, { success: true, config, status } as any);
+  } catch (err: any) {
+    console.error('[CoworkProxy] Failed to set heartbeat config:', err);
+    writeJSON(res, 500, { success: false, error: err.message } as any);
+  }
+}
+
+async function handleGetHeartbeatFile(
+  _req: http.IncomingMessage,
+  res: http.ServerResponse
+): Promise<void> {
+  if (!heartbeatDeps) {
+    writeJSON(res, 503, { success: false, error: 'Heartbeat service not available' } as any);
+    return;
+  }
+  try {
+    const content = heartbeatDeps.readHeartbeatFile();
+    writeJSON(res, 200, { success: true, exists: content !== null, content: content || '' } as any);
+  } catch (err: any) {
+    console.error('[CoworkProxy] Failed to read HEARTBEAT.md:', err);
+    writeJSON(res, 500, { success: false, error: err.message } as any);
+  }
+}
+
+async function handleSetHeartbeatFile(
+  req: http.IncomingMessage,
+  res: http.ServerResponse
+): Promise<void> {
+  if (!heartbeatDeps) {
+    writeJSON(res, 503, { success: false, error: 'Heartbeat service not available' } as any);
+    return;
+  }
+
+  let body: string;
+  try {
+    body = await readRequestBody(req);
+  } catch {
+    writeJSON(res, 400, { success: false, error: 'Invalid request body' } as any);
+    return;
+  }
+
+  let input: any;
+  try {
+    input = JSON.parse(body);
+  } catch {
+    writeJSON(res, 400, { success: false, error: 'Invalid JSON' } as any);
+    return;
+  }
+
+  if (typeof input.content !== 'string') {
+    writeJSON(res, 400, { success: false, error: 'Field "content" (string) is required' } as any);
+    return;
+  }
+
+  try {
+    heartbeatDeps.writeHeartbeatFile(input.content);
+    console.log('[CoworkProxy] HEARTBEAT.md updated via API');
+    writeJSON(res, 200, { success: true } as any);
+  } catch (err: any) {
+    console.error('[CoworkProxy] Failed to write HEARTBEAT.md:', err);
+    writeJSON(res, 500, { success: false, error: err.message } as any);
+  }
+}
+
+async function handleHeartbeatRunNow(
+  _req: http.IncomingMessage,
+  res: http.ServerResponse
+): Promise<void> {
+  if (!heartbeatDeps) {
+    writeJSON(res, 503, { success: false, error: 'Heartbeat service not available' } as any);
+    return;
+  }
+  try {
+    const result = await heartbeatDeps.getHeartbeatRunner().runOnce();
+    writeJSON(res, 200, { success: true, result } as any);
+  } catch (err: any) {
+    console.error('[CoworkProxy] Failed to run heartbeat:', err);
+    writeJSON(res, 500, { success: false, error: err.message } as any);
+  }
+}
+
+async function handleHeartbeatHistory(
+  _req: http.IncomingMessage,
+  res: http.ServerResponse
+): Promise<void> {
+  if (!heartbeatDeps) {
+    writeJSON(res, 503, { success: false, error: 'Heartbeat service not available' } as any);
+    return;
+  }
+  try {
+    const history = heartbeatDeps.getHeartbeatRunner().getHistory();
+    writeJSON(res, 200, { success: true, history } as any);
+  } catch (err: any) {
+    console.error('[CoworkProxy] Failed to get heartbeat history:', err);
+    writeJSON(res, 500, { success: false, error: err.message } as any);
+  }
+}
+
 async function handleRequest(
   req: http.IncomingMessage,
   res: http.ServerResponse
@@ -2506,6 +2669,30 @@ async function handleRequest(
     if (method === 'PUT') { await handleUpdateScheduledTask(req, res, id); return; }
     if (method === 'DELETE') { await handleDeleteScheduledTask(req, res, id); return; }
   }
+
+  // Heartbeat API
+  const HB_CONFIG_PATH = '/api/heartbeat/config';
+  const HB_FILE_PATH = '/api/heartbeat/file';
+  const HB_RUN_PATH = '/api/heartbeat/run';
+  const HB_HISTORY_PATH = '/api/heartbeat/history';
+
+  if (url.pathname === HB_CONFIG_PATH) {
+    if (method === 'GET') { await handleGetHeartbeatConfig(req, res); return; }
+    if (method === 'POST') { await handleSetHeartbeatConfig(req, res); return; }
+  }
+  if (url.pathname === HB_FILE_PATH) {
+    if (method === 'GET') { await handleGetHeartbeatFile(req, res); return; }
+    if (method === 'PUT') { await handleSetHeartbeatFile(req, res); return; }
+  }
+  if (method === 'POST' && url.pathname === HB_RUN_PATH) {
+    await handleHeartbeatRunNow(req, res);
+    return;
+  }
+  if (method === 'GET' && url.pathname === HB_HISTORY_PATH) {
+    await handleHeartbeatHistory(req, res);
+    return;
+  }
+
   console.log(`[CoworkProxy] ${method} ${url.pathname}`);
 
   if (method !== 'POST' || url.pathname !== '/v1/messages') {

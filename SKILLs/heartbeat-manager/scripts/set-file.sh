@@ -1,0 +1,140 @@
+#!/bin/bash
+# Write/update HEARTBEAT.md file via LobsterAI internal API.
+# Usage: bash "$SKILLS_ROOT/heartbeat-manager/scripts/set-file.sh" '<json_payload>'
+#    or: bash "$SKILLS_ROOT/heartbeat-manager/scripts/set-file.sh" @/tmp/heartbeat-file.json
+#
+# The JSON payload must contain: { "content": "file content here" }
+# Returns JSON response: { "success": true } or { "success": false, "error": "..." }
+#
+# Environment variables (set automatically by LobsterAI cowork session):
+#   LOBSTERAI_API_BASE_URL - Internal proxy URL (always points to local proxy)
+
+HTTP_NODE_CMD=""
+HTTP_NODE_ARGS=()
+HTTP_NODE_ENV_PREFIX=()
+
+is_windows_bash() {
+  case "$(uname -s 2>/dev/null)" in
+    MINGW*|MSYS*|CYGWIN*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+resolve_http_node_runtime() {
+  if [ -n "$HTTP_NODE_CMD" ]; then
+    return 0
+  fi
+
+  if command -v node > /dev/null 2>&1; then
+    HTTP_NODE_CMD="node"
+    HTTP_NODE_ARGS=()
+    HTTP_NODE_ENV_PREFIX=()
+    return 0
+  fi
+
+  if [ -n "${LOBSTERAI_ELECTRON_PATH:-}" ] && [ -x "${LOBSTERAI_ELECTRON_PATH}" ]; then
+    HTTP_NODE_CMD="$LOBSTERAI_ELECTRON_PATH"
+    HTTP_NODE_ARGS=()
+    HTTP_NODE_ENV_PREFIX=("ELECTRON_RUN_AS_NODE=1")
+    return 0
+  fi
+
+  return 1
+}
+
+http_put_json() {
+  local URL="$1"
+  local BODY="$2"
+
+  if ! is_windows_bash; then
+    if command -v curl > /dev/null 2>&1; then
+      if curl -s -f -X PUT "$URL" \
+        -H "Content-Type: application/json" \
+        -d "$BODY"; then
+        return 0
+      fi
+    fi
+  fi
+
+  if ! resolve_http_node_runtime; then
+    return 127
+  fi
+
+  env "${HTTP_NODE_ENV_PREFIX[@]}" "$HTTP_NODE_CMD" "${HTTP_NODE_ARGS[@]}" - "$URL" "$BODY" <<'NODE'
+const [url, body] = process.argv.slice(2);
+
+(async () => {
+  try {
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+    });
+    const responseBody = await response.text();
+    if (!response.ok) {
+      if (responseBody) {
+        process.stdout.write(responseBody);
+      } else {
+        process.stdout.write(
+          JSON.stringify({
+            success: false,
+            error: `Request failed with status ${response.status}`,
+          })
+        );
+      }
+      process.exit(22);
+    }
+    process.stdout.write(responseBody);
+  } catch (error) {
+    const message =
+      error && typeof error === 'object' && 'message' in error
+        ? String(error.message)
+        : 'HTTP request failed';
+    process.stdout.write(JSON.stringify({ success: false, error: message }));
+    process.exit(1);
+  }
+})();
+NODE
+}
+
+if [ -z "$LOBSTERAI_API_BASE_URL" ]; then
+  echo '{"success":false,"error":"LOBSTERAI_API_BASE_URL not set. This script must run inside a LobsterAI cowork session."}'
+  exit 1
+fi
+
+if [ -z "$1" ]; then
+  echo '{"success":false,"error":"No JSON payload provided. Usage: set-file.sh '\''<json>'\'' or set-file.sh @/path/to/file.json"}'
+  exit 1
+fi
+
+PAYLOAD="$1"
+
+# Support @file syntax to avoid command-line encoding issues with non-ASCII text.
+if [ "${PAYLOAD#@}" != "$PAYLOAD" ]; then
+  PAYLOAD_FILE="${PAYLOAD#@}"
+  if [ ! -f "$PAYLOAD_FILE" ]; then
+    echo "{\"success\":false,\"error\":\"Payload file not found: ${PAYLOAD_FILE}\"}"
+    exit 1
+  fi
+  PAYLOAD="$(cat "$PAYLOAD_FILE")"
+fi
+
+BASE_URL="${LOBSTERAI_API_BASE_URL%/}"
+
+RESPONSE="$(http_put_json "${BASE_URL}/api/heartbeat/file" "$PAYLOAD")"
+CODE=$?
+if [ "$CODE" -ne 0 ]; then
+  if [ -n "$RESPONSE" ]; then
+    echo "$RESPONSE"
+    exit "$CODE"
+  fi
+
+  if [ "$CODE" -eq 127 ]; then
+    echo '{"success":false,"error":"No HTTP client available. Install curl/wget or ensure Node/Electron runtime is available."}'
+  else
+    echo "{\"success\":false,\"error\":\"Request failed with exit code ${CODE}\"}"
+  fi
+  exit "$CODE"
+fi
+
+echo "$RESPONSE"

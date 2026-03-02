@@ -12,7 +12,7 @@ import { getCurrentApiConfig, resolveCurrentApiConfig, setStoreGetter } from './
 import { saveCoworkApiConfig } from './libs/coworkConfigStore';
 import { generateSessionTitle } from './libs/coworkUtil';
 import { ensureSandboxReady, getSandboxStatus, onSandboxProgress } from './libs/coworkSandboxRuntime';
-import { startCoworkOpenAICompatProxy, stopCoworkOpenAICompatProxy, setScheduledTaskDeps } from './libs/coworkOpenAICompatProxy';
+import { startCoworkOpenAICompatProxy, stopCoworkOpenAICompatProxy, setScheduledTaskDeps, setHeartbeatDeps } from './libs/coworkOpenAICompatProxy';
 import { IMGatewayManager, IMPlatform, IMGatewayConfig } from './im';
 import { APP_NAME } from './appConstants';
 import { getSkillServiceManager } from './skillServices';
@@ -2522,6 +2522,46 @@ if (!gotTheLock) {
 
     // Inject scheduled task dependencies into the proxy server
     setScheduledTaskDeps({ getScheduledTaskStore, getScheduler });
+
+    // Inject heartbeat dependencies into the proxy server
+    {
+      const parseHeartbeatConfig = (): import('./heartbeat').HeartbeatConfig => {
+        const raw = getStore().getHeartbeatConfig();
+        const defaults = getDefaultHeartbeatConfig();
+        return {
+          enabled: raw.enabled === 'true' ? true : (raw.enabled === 'false' ? false : defaults.enabled),
+          intervalMs: raw.intervalMs ? parseInt(raw.intervalMs, 10) : defaults.intervalMs,
+          prompt: raw.prompt ?? defaults.prompt,
+          activeHours: raw.activeHours ? JSON.parse(raw.activeHours) : defaults.activeHours,
+          notifyPlatforms: raw.notifyPlatforms ? JSON.parse(raw.notifyPlatforms) : defaults.notifyPlatforms,
+          ackMaxChars: raw.ackMaxChars ? parseInt(raw.ackMaxChars, 10) : defaults.ackMaxChars,
+          workingDirectory: raw.workingDirectory || undefined,
+          sessionId: raw.sessionId || undefined,
+        };
+      };
+      const resolveHeartbeatWorkingDir = (): string | null => {
+        const hbConfig = getStore().getHeartbeatConfig();
+        return hbConfig.workingDirectory || getCoworkStore().getConfig().workingDirectory || null;
+      };
+      setHeartbeatDeps({
+        getHeartbeatRunner,
+        getConfig: parseHeartbeatConfig,
+        saveConfig: (config) => getHeartbeatRunner().updateConfig(config),
+        readHeartbeatFile: () => {
+          const workingDir = resolveHeartbeatWorkingDir();
+          if (!workingDir) return null;
+          const filePath = path.join(workingDir, 'HEARTBEAT.md');
+          if (!fs.existsSync(filePath)) return null;
+          return fs.readFileSync(filePath, 'utf-8');
+        },
+        writeHeartbeatFile: (content: string) => {
+          const workingDir = resolveHeartbeatWorkingDir();
+          if (!workingDir) throw new Error('Working directory not set');
+          const filePath = path.join(workingDir, 'HEARTBEAT.md');
+          fs.writeFileSync(filePath, content, 'utf-8');
+        },
+      });
+    }
 
     // 设置安全策略
     setContentSecurityPolicy();
